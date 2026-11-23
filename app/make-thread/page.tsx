@@ -4,26 +4,152 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import LoginButton from '@/components/LoginButton' 
 import type { User } from '@supabase/supabase-js'
+import { RadioOption } from '@/components/RadioOption'
+import { useRouter } from 'next/navigation'
+
+type KisonArgItem = {
+  id: number
+  title: string
+}
 
 export default function MakeThreadPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [selected, setSelected] = useState("kison");
-  const [selected2,setSelected2]=useState('private')
-  const newOrKison = (event: React.ChangeEvent<HTMLInputElement>) => setSelected(event.target.value);
-  const isPublic = (event: React.ChangeEvent<HTMLInputElement>) => setSelected2(event.target.value);
+  const [selected, setSelected] = useState<"kison" | "new">("new");
+  const [selected2, setSelected2] = useState<"public" | "private">("private");
+
+  const [submitting, setSubmitting] = useState(false)
+
   const [title,setTitle]=useState<string>('')
   const [description,setDescription]=useState<string>('')
   const [threadTitle,setThreadTitle]=useState<string>('')
 
+  const [kisonArg,setKisonArg]=useState<KisonArgItem[]>([])
+  const [selectedArgId, setSelectedArgId] = useState<string>('')
+
+  const supabase=createClient()
+  const router=useRouter()
+
+  const isThreadTitleEmpty = threadTitle.trim() === ''
+  const isNewArgTitleEmpty = selected === 'new' && title.trim() === ''
+  const isDisabled = submitting || isThreadTitleEmpty || isNewArgTitleEmpty
+  
+  const newOrKison = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    if (value === "kison" || value === "new") {
+      setSelected(value);
+    }
+  };
+
+  const reset=()=>{
+    setSelected('new')
+    setSelected2('private')
+    setTitle('')
+    setDescription('')
+    setThreadTitle('')
+  }
+  
+  const isPublic = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    if (value === "public" || value === "private") {
+      setSelected2(value);
+    }
+  };
+
+  const handleSend=async()=>{
+    setSubmitting(true)
+    if (selected === 'new') {
+      const { data: createdArg, error } = await supabase
+        .from('args')
+        .insert({
+          title: title.trim(),
+          description: description.trim(),
+        })
+        .select('id')
+        .single()
+      
+      if (error) {
+        console.error('ARG作成エラー:', error.message)
+        alert("ARGの作成に失敗しました。")
+        return
+      }else{
+        const argId = createdArg.id
+        const {error:error2}=await supabase
+          .from('threads')
+          .insert({
+            title:threadTitle,
+            is_public:selected2==="public",
+            arg_id:argId
+          })
+
+        if (error2){
+          console.error('スレッド作成エラー:',error2.message)
+          alert("スレッドの作成に失敗しました。")
+          return
+        }
+      }
+    }else{
+      if (!selectedArgId) {
+        alert('追加先のARGを選択してください。')
+        setSubmitting(false)
+        return
+      }
+    
+      const { error: error2 } = await supabase
+        .from('threads')
+        .insert({
+          title: threadTitle.trim(),
+          is_public: selected2 === 'public',
+          arg_id: Number(selectedArgId),
+        })
+      
+      if (error2) {
+        console.error('スレッド作成エラー:', error2.message)
+        alert('スレッドの作成に失敗しました。')
+        setSubmitting(false)
+        return
+      }
+      
+    }
+    setSubmitting(false)
+    alert('作成しました。')
+    router.push('/')
+    reset()
+  }
   useEffect(() => {
     const checkUser = async () => {
       const supabase = createClient()
       const { data } = await supabase.auth.getUser()
-      setUser(data.user)
+      const currentUser = data.user
+
+      setUser(currentUser)
       setLoading(false)
+
+      if (!currentUser) return
+
+      const { data: data2, error } = await supabase
+        .from('args')
+        .select('id,title')
+        .eq('owner_id', currentUser.id)
+
+      if (error) {
+        console.error('取得エラー:', error.message)
+        return
+      }else{
+        const list: KisonArgItem[] = (data2 ?? []).map((item) => ({
+          id: Number(item.id),
+          title: String(item.title ?? ''),
+        }))
+        setKisonArg(list)
+        if (list.length > 0) {
+          setSelectedArgId(String(list[0].id))
+        }
+      }
+
+      console.log('自分のARG:', data2)
     }
+
     checkUser()
   }, [])
 
@@ -41,27 +167,48 @@ export default function MakeThreadPage() {
   }
 
   return (
-    <main>
+    <main className='space-y-6'>
       <h1>新しいスレッドを立てる</h1>
       <section>
-        <div className="col-4">
-          <label className="form-check-label">
-            <input className="form-check-input" type="radio" name="newOrKison" 
-              value="kison" checked={"kison" === selected} onChange={newOrKison}/>
-            <span className="fs-6">既存のARGにスレッドを追加する</span>
-          </label>
-        </div>
-        <div className="col-4">
-          <label className="form-check-label">
-            <input className="form-check-input" type="radio" name="newOrKison" 
-              value="new" checked={"new" === selected} onChange={newOrKison}/>
-            <span className="fs-6">新しいARGを作って、そこにスレッドを立てる</span>
-          </label>
-        </div>
+        <RadioOption
+          name="newOrKison"
+          value="new"
+          checked={"new" === selected}
+          onChange={newOrKison}
+          label="新しいARGを作って、そこにスレッドを立てる"
+        />
+        <RadioOption
+            name="newOrKison"
+            value="kison"
+            checked={"kison" === selected}
+            onChange={newOrKison}
+            label="既存のARGにスレッドを追加する"
+          />
+
         {selected==="kison"?
           (
             <div>
-              <p>どのARGにスレッドを追加しますか？</p>
+              {kisonArg.length==0?
+                (
+                  <p>あなたはまだこの掲示板でARGを作っていません。新しいARGを作ってください</p>
+                ):(
+                  <div>
+                    <p>どのARGにスレッドを追加しますか？</p>
+                    <select
+                      name="args"
+                      value={selectedArgId}
+                      onChange={(e) => setSelectedArgId(e.target.value)}
+                    >
+                      {kisonArg.map((arg) => (
+                        <option key={arg.id} value={arg.id}>
+                          {arg.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                )
+              }
             </div>
           ):(
             <div>
@@ -94,21 +241,29 @@ export default function MakeThreadPage() {
         />
       </section>
       <section>
-        <div className="col-4">
-          <label className="form-check-label">
-            <input className="form-check-input" type="radio" name="isPublic" 
-              value="public" checked={"public" === selected2} onChange={isPublic}/>
-            <span className="fs-6">掲示板を訪れた全員に見えるようにする</span>
-          </label>
-        </div>
-        <div className="col-4">
-          <label className="form-check-label">
-            <input className="form-check-input" type="radio" name="isPublic" 
-              value="private" checked={"private" === selected2} onChange={isPublic}/>
-            <span className="fs-6">リンクを知っている人のみに見えるようにする</span>
-          </label>
-        </div>
+        <RadioOption
+          name="isPublic"
+          value="public"
+          checked={"public" === selected2}
+          onChange={isPublic}
+          label="掲示板のトップページに表示する"
+        />
+        <RadioOption
+          name="isPublic"
+          value="private"
+          checked={"private" === selected2}
+          onChange={isPublic}
+          label="掲示板のトップページに表示しない。または、あとでトップページに表示する。"
+        />
       </section>
+      <button
+        type="button"
+        disabled={isDisabled}
+        onClick={handleSend}
+        className="border-2 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {submitting ? '作成中...' : 'スレッドを作成'}
+      </button>
     </main>
   )
 }

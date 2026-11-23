@@ -27,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <header className="p-3 bg-slate-200 flex items-center justify-between">
-          <p className="text-2xl">ARG-BBS</p>
+          <Link href='/' className="text-2xl">ARG-BBS</Link>
           <LoginButton/>
         </header>
         {children}
