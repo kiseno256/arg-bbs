@@ -26,6 +26,8 @@ function ThreadPage({ paramsPromise }: { paramsPromise: Promise<{ id: string }> 
 
   const supabase = useMemo(() => createClient(), []);
 
+
+
   const fetchPosts = useCallback(async () => {
     const { data: data2, error: error2 } = await supabase
       .from('posts')
@@ -72,6 +74,28 @@ function ThreadPage({ paramsPromise }: { paramsPromise: Promise<{ id: string }> 
   };
 
   useEffect(() => {
+    const channel = supabase
+      .channel(`posts-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "posts",
+        },
+        (payload) => {
+          console.log("更新されたよ:", payload);
+          fetchPosts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, supabase, fetchPosts]);
+
+  useEffect(() => {
     const init = async () => {
       const { data, error } = await supabase
         .from('threads')
@@ -93,34 +117,46 @@ function ThreadPage({ paramsPromise }: { paramsPromise: Promise<{ id: string }> 
 
   return (
     <div>
-      <h1>{title}</h1>
+      <h1 className="m-3 text-2xl">{title}</h1>
       {posts.map((post) => (
         <div
           key={post.id}
-          className={post.role === 'GM' ? "bg-red-300" : "bg-slate-100"}
+          className={`m-1 p-1 ${post.role === 'GM' ? "bg-red-300" : "bg-slate-100"}`}
         >
-          <p>{post.author_name}</p>
+          <p className="text-green-700">{post.author_name}:</p>
           <p>{post.content}</p>
         </div>
       ))}
-      <div>
-        <small>
-          名前:
-          <input
-            type="text"
-            className="border-2"
-            onChange={(e) => setName(e.target.value)}
-            value={name}
+      <div className="m-1 p-2 bg-slate-100 space-y-2">
+        <div>
+          <small className="text-green-700">
+            名前:
+            <input
+              type="text"
+              className="ml-1 px-1 bg-white border border-slate-300 text-black"
+              onChange={(e) => setName(e.target.value)}
+              value={name}
+            />
+          </small>
+        </div>
+        <div>
+          <textarea
+            rows={3}
+            className="w-full p-1 bg-white border border-slate-300"
+            onChange={(e) => setContent(e.target.value)}
+            value={content}
           />
-        </small>
-        <textarea
-          className="border-2"
-          onChange={(e) => setContent(e.target.value)}
-          value={content}
-        />
-        <button onClick={handleSend}>送信</button>
+        </div>
+        <div>
+          <button
+            className="px-3 py-1 bg-slate-200 hover:bg-slate-300 border border-slate-400 cursor-pointer"
+            onClick={handleSend}
+          >
+            送信
+          </button>
+        </div>
       </div>
-    </div>
+</div>
   );
 }
 

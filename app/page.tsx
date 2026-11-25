@@ -3,7 +3,7 @@
 import LoginButton from "@/components/LoginButton";
 import { createClient } from "@/lib/supabase";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Thread={
   id:string;
@@ -14,7 +14,7 @@ type Thread={
 export default function Home(){
   const [threads,setThreads]=useState<Thread[]>([])
 
-  const supabase=createClient()
+  const supabase=useMemo(()=>createClient(),[])
 
   useEffect(()=>{
     const kansuu=async()=>{
@@ -45,13 +45,15 @@ export default function Home(){
   },[])
   return (
     <div>
-      <main>
-        <Link href="/make-thread">スレッドを立てる</Link>
+      <main className="p-1">
+        <Link href="/creater-page" className="m-2 p-1 bg-slate-300">クリエイターページへ</Link>
         <div>
           {threads.map((thread)=>(
-            <Link key={thread.id} href={`/thread/${thread.id}`}>
-              <h2>{thread.title}</h2>
-              <p>{thread.arg_title}</p>
+            <Link
+              className="m-3 p-1 bg-slate-100 block hover:underline"
+              key={thread.id} href={`/thread/${thread.id}`}>
+              <h2 className="text-xl">{thread.title}</h2>
+              <p className="text-sm text-slate-500">{thread.arg_title}</p>
             </Link>
           ))}
         </div>

@@ -2,13 +2,23 @@
 
 import { createClient } from "@/lib/supabase"
 import { User } from "@supabase/supabase-js"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 export default function LoginButton() {
   const [user, setUser] = useState<User | null>(null)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const handleGoogleLogin = async () => {
+    if(user){
+      const {error}=await supabase.auth.signOut()
+      if(error){
+        alert('ログアウトに失敗しました')
+      }else{
+        alert('ログアウトしました')
+      }
+      setUser(null)
+      return
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -32,10 +42,10 @@ export default function LoginButton() {
   return (
     <div>
       <button
-        className="cursor-pointer"
+        className="cursor-pointer m-1 p-1 bg-slate-200"
         onClick={handleGoogleLogin}
       >
-        {user ? "ログイン済み" : "Googleでログイン"}
+        {user ? "ログアウト" : "Googleでログイン"}
       </button>
     </div>
   )
